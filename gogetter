@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+# Recommended usage in bash profile:
+# alias something='/path/to/script/gogetter /path/to/go/repo'
+
+set -e
+
+REPO_PATH=$1
+
+exiter() {
+    echo "${1}"
+    exit "${2}"
+}
+
+goget() {
+    # store current directory
+    local parent_path
+    parent_path=$(pwd)
+
+    # change to repository with commit
+    cd "${REPO_PATH}" || exiter "could not cd into ${REPO_PATH}" 1
+
+    # grep the commit from git log and set as bash array
+    local commit_array
+    # shellcheck disable=SC2207
+    commit_array=($(git log -1 | grep commit))
+    echo "latest commit is: ${commit_array[1]}"
+
+    # get the go module
+    local commit_module
+    # shellcheck disable=SC2207
+    commit_module=($(grep module go.mod))
+    echo "for module: ${commit_module[1]}"
+
+    # change back to the parent path and apply
+    cd "${parent_path}" || exiter "could not cd back to parent ${parent_path}" 1
+    echo "applying: go get ${commit_module[1]}@${commit_array[1]}"
+    go get "${commit_module[1]}"@"${commit_array[1]}"
+    echo "now tidying: go mod tidy"
+    go mod tidy
+}
+
+goget
