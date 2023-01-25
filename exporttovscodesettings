@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+# Recommended usage in bash profile:
+# alias something='/path/to/script/exporttovscodesettings "$(cat /some/file/with/exports)" "        " | pbcopy'
+
+set -e
+
+splitline() {
+    local input="${1}"
+    local spacing="${2}"
+    local out=""
+    while read -r line; do
+        s=$(splitexport "${line}")
+        if [ "${out}" = "" ]; then
+            out="${s}"
+        else
+            out="${out}\n${spacing}${s}"
+        fi
+    done <<<"$input"
+    out=$(removelastchar "${out}")
+    echo "${out}"
+}
+
+splitexport() {
+    local input="${1}"
+    # shellcheck disable=SC2034
+    IFS=' ' read -r exp string <<<"$input"
+    IFS='=' read -r k v <<<"$string"
+    echo "\"${k}\":${v},"
+}
+
+removelastchar() {
+    local input="${1}"
+    out=${input%?}
+    echo "${out}"
+}
+
+output=$(splitline "${1}")
+echo -e "${output}"
