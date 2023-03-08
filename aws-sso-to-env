@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+
+# Sets the AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and AWS_SESSION_TOKEN export string
+# to the clipboard. This is useful for setting up a shell with AWS credentials
+
+# Recommended usage in bash profile:
+# alias something='/path/to/script/aws-sso-to-env <profile>'
+
+PROFILE=$1
+
+# Read profile from .aws/config to get account id
+ACCOUNT_ID=$(aws configure get sso_account_id --profile "${PROFILE}")
+
+# Read the role name
+ROLE_NAME=$(aws configure get sso_role_name --profile "${PROFILE}")
+
+# Pull the access token from the cache
+
+readFile() {
+    local FILE
+    FILE=$1
+    local START_URL
+    START_URL=$(jq -r '.startUrl' ~/.aws/sso/cache/"${FILE}")
+    local ACCESS_TOKEN
+    ACCESS_TOKEN=$(jq -r '.accessToken' ~/.aws/sso/cache/"${FILE}")
+    local EXPIRES_AT
+    EXPIRES_AT=$(jq -r '.expiresAt' ~/.aws/sso/cache/"${FILE}")
+    # check if START_URL is not empty
+    if [[ -n ${START_URL} ]]; then
+        # check if ACCESS_TOKEN is empty
+        if [[ -n ${ACCESS_TOKEN} ]]; then
+            # check if EXPIRES_AT is empty
+            if [[ -n ${EXPIRES_AT} ]]; then
+                echo "${ACCESS_TOKEN}"
+            fi
+        fi
+    fi
+}
+
+readFiles() {
+    local FILE_LIST
+    FILE_LIST=$(ls ~/.aws/sso/cache/)
+    local ACCESS_TOKEN=""
+    # For each file in the cache, check if it contains a startUrl, accessToekn and expiresAt
+    for FILE in ${FILE_LIST}; do
+        ACCESS_TOKEN=$(readFile "${FILE}")
+        if [[ -n ${ACCESS_TOKEN} ]]; then
+            echo "${ACCESS_TOKEN}"
+            break
+        fi
+    done
+}
+
+ACCESS_TOKEN=$(readFiles)
+
+# get credentials
+CREDS=$(aws sso get-role-credentials --role-name "${ROLE_NAME}" --account-id "${ACCOUNT_ID}" --access-token "${ACCESS_TOKEN}")
+AK=$(echo "${CREDS}" | jq -r '.roleCredentials.accessKeyId')
+SAK=$(echo "${CREDS}" | jq -r '.roleCredentials.secretAccessKey')
+ST=$(echo "${CREDS}" | jq -r '.roleCredentials.sessionToken')
+echo "export AWS_ACCESS_KEY_ID=${AK}
+export AWS_SECRET_ACCESS_KEY=${SAK}
+export AWS_SESSION_TOKEN=${ST}" | pbcopy
